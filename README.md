@@ -23,6 +23,25 @@ Ice is a powerful menu bar management tool. While its primary function is hiding
 
 ## Install
 
+### Local macOS 27 compatibility build
+
+This checkout includes the macOS 26 and 27 compatibility port. On macOS 27,
+Ice discovers items through Accessibility and saves sections per application,
+because the system no longer creates a separate window for each menu bar item.
+See [macOS compatibility notes](MACOS-COMPATIBILITY.md) for source attribution,
+limitations, and validation results.
+
+With Xcode 27 or later installed, build a locally signed app:
+
+```sh
+./Scripts/build-local.sh
+```
+
+Open `build/Ice Compatibility.app`. The script does not replace an installed copy. Local builds
+disable the upstream updater and do not require an Apple Developer membership.
+macOS may require Accessibility and Screen Recording to be granted again for
+the new signature. Screen Recording remains optional for basic hiding.
+
 ### Manual Installation
 
 Download the "Ice.zip" file from the [latest release](https://github.com/jordanbaird/Ice/releases/latest) and move the unzipped app into your `Applications` folder.
