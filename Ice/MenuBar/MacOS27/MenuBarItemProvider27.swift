@@ -108,6 +108,14 @@ enum MenuBarItemProvider27 {
     nonisolated(unsafe) private static var lastItems: [MenuBarItem]?
     nonisolated(unsafe) private static var lastReadAt: TimeInterval = 0
 
+    static func cachedItems() -> [MenuBarItem] {
+        lock.withLock { lastItems ?? [] }
+    }
+
+    static func invalidateCache() {
+        lock.withLock { lastReadAt = 0 }
+    }
+
     /// Returns the current frame of the item with the given synthetic identifier.
     ///
     /// Ice's own items are answered from the last read: asking our own process
@@ -347,7 +355,7 @@ enum MenuBarItemProvider27 {
             guard let tag = tag(for: raw, ownPID: ownPID) else {
                 continue
             }
-            let windowID = SyntheticWindowID27.make(bundleID: raw.bundleID, identifier: tag.title, index: raw.index)
+            let windowID = SyntheticWindowID27.make(bundleID: raw.bundleID, identifier: tag.title, index: raw.index, processID: raw.pid)
             newEntries[windowID] = Entry(element: raw.element, bundleID: raw.bundleID, identifier: raw.identifier, frame: raw.frame)
             items.append(MenuBarItem(
                 tag: tag,

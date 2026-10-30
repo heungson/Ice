@@ -51,6 +51,15 @@ final class AppState: ObservableObject {
 
     /// Storage for ``concealer27``, typed loosely so the property exists on every macOS.
     private var concealer27Storage: AnyObject?
+    private var sectionBoundary27Storage: AnyObject?
+
+    @available(macOS 27.0, *)
+    var sectionBoundary27: SectionBoundaryController27 {
+        if let controller = sectionBoundary27Storage as? SectionBoundaryController27 { return controller }
+        let controller = SectionBoundaryController27()
+        sectionBoundary27Storage = controller
+        return controller
+    }
 
     /// Hides menu bar items on macOS 27.
     @available(macOS 27.0, *)
@@ -134,6 +143,9 @@ final class AppState: ObservableObject {
             concealer27.performSetup(with: self)
         }
         await itemManager.performSetup(with: self)
+        if #available(macOS 27.0, *) {
+            sectionBoundary27.performSetup(with: self)
+        }
         imageCache.performSetup(with: self)
         updatesManager.performSetup(with: self)
         userNotificationManager.performSetup(with: self)

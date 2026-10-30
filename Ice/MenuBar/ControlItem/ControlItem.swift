@@ -5,6 +5,7 @@
 
 import Cocoa
 import Combine
+import OSLog
 
 // MARK: - ControlItem
 
@@ -371,6 +372,10 @@ final class ControlItem {
         case .visible:
             updateStatusItemVisibility(true)
             button.appearsDisabled = false
+            let actionLabel = state == .hideSection ? "Show Hidden Items" : "Hide Hidden Items"
+            button.toolTip = actionLabel
+            button.setAccessibilityLabel("Ice: \(actionLabel)")
+            button.setAccessibilityHelp("Click to toggle the items left of Ice's arrow. Command-drag an item across the arrow to change its section.")
 
             let icon = appState.settings.general.iceIcon
 
@@ -553,14 +558,17 @@ final class ControlItem {
     /// Performs the control item's action.
     @objc private func performAction() {
         guard
-            let menuBarManager = appState?.menuBarManager,
-            let event = NSApp.currentEvent
+            let menuBarManager = appState?.menuBarManager
         else {
             return
         }
 
-        switch event.type {
-        case .leftMouseDown:
+        // Command-drag places the boundary; it must not toggle concealment first.
+        guard !NSEvent.modifierFlags.contains(.command) else { return }
+        switch NSApp.currentEvent?.type {
+        case .rightMouseUp:
+            showMenu()
+        default:
             let modifierFlags = NSEvent.modifierFlags
 
             // Running this from a Task seems to improve the visual
@@ -585,12 +593,9 @@ final class ControlItem {
                     section.isEnabled
                 {
                     section.toggle()
+                    Logger.default.notice("Ice arrow toggled: \(section.isHidden ? "hidden" : "shown", privacy: .public)")
                 }
             }
-        case .rightMouseUp:
-            showMenu()
-        default:
-            return
         }
     }
 

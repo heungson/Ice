@@ -70,7 +70,7 @@ private struct NativeSectionLayoutBar27: View {
         GeometryReader { geometry in
             ScrollView(.horizontal) {
                 HStack(spacing: 4) {
-                    ForEach(itemManager.itemCache.managedItems(for: section), id: \.tag) { item in
+                    ForEach(itemManager.itemCache.managedItems(for: section), id: \.windowID) { item in
                         tile(for: item)
                     }
                 }

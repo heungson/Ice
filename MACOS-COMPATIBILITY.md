@@ -14,7 +14,7 @@ under this project's GPL-3.0 license. The assessment-mode adapter preserves its
 Thaw and Barometer attribution in its source.
 
 - macOS 27 item discovery uses Accessibility rather than separate item windows.
-- Sections persist per application, since macOS controls icon ordering.
+- Sections persist per application and are physically arranged around Ice's arrow.
 - The default hiding backend uses macOS's per-application menu bar switch and
   records changes so launch and normal termination can restore them.
 - An assessment-mode fallback resolves private APIs at runtime. It can affect
@@ -45,7 +45,8 @@ signature before copying it there. To make a Debug build, set
 `ICE_CONFIGURATION=Debug`. `ICE_DERIVED_DATA` optionally selects a build cache.
 
 The macOS 27 layout uses SwiftUI tiles with drag-and-drop and section context
-menus. Tiles no longer depend on Accessibility frames, which can be zero or stale
+menus. A section change also arranges the actual icons around Ice's arrow.
+Tiles no longer depend on Accessibility frames, which can be zero or stale
 for concealed items. If a glyph cannot be captured, the application's icon is
 used so the item remains reachable.
 
@@ -66,8 +67,8 @@ Ice permission entry but the new app is denied access, remove the stale entry
 and grant the new app access through System Settings. The build script does not
 alter privacy permissions.
 
-Private macOS behavior can change in future updates. macOS 27 manages item order;
-Ice's sections apply to all items belonging to an application. Assessment mode
+Private macOS behavior can change in future updates. Ice's sections apply to all
+items belonging to an application. Assessment mode
 has additional restrictions described above. These are platform limitations,
 not features covered by the passing unit tests.
 
@@ -90,9 +91,51 @@ not features covered by the passing unit tests.
 - Restored eqMac to Visible, disabled the temporary Ice Bar setting, restored
   automatic rehiding, and cleared the temporary hotkey after testing.
 
-Not verified: physical status-icon and global-hotkey activation on this crowded
-menu bar, drag-and-drop through desktop automation, external-display transitions,
-and older macOS releases. The Settings controls and context menus were exercised
+At the initial port validation, physical status-icon and global-hotkey activation
+on this crowded menu bar, drag-and-drop through desktop automation, external-display
+transitions, and older macOS releases were not verified. Arrow activation and
+physical ordering were subsequently verified below. The Settings controls and context menus were exercised
 directly. This is a local compatibility build, not a notarized release.
 
 Build and test logs are saved in `build/validation/` (ignored build output).
+
+## Arrow boundary revision
+
+The initial compatibility port saved visibility without maintaining a physical
+boundary. This revision restores the two-group arrangement: hidden icons to the
+left of the arrow and visible icons to its right. Normal clicks toggle visibility;
+Command-drags change section membership instead of toggling the arrow.
+
+- `SectionBoundaryController27` performs real Command-drags and checks the resulting
+  Accessibility positions after each move. It does not restart MenuBarAgent.
+- When an applet resists a direct move, Ice moves its own arrow past the hidden
+  group and places visible items on the right instead.
+- Command-dragging an icon across the arrow updates the saved section. Dragging
+  the arrow adopts the visible boundary. New applications appearing on its left
+  enter Hidden; additional icons of an already known app follow that app's section.
+- Multiple processes from the same app receive distinct runtime item identifiers.
+  The native macOS visibility switch still applies to the entire application, so
+  all of an application's icons follow its section together.
+- The mover is adapted from [fif7y/dimble](https://github.com/fif7y/dimble),
+  revision `57d6ac1767a145efde5475a80bffd5d5cb20fefc`, under GPL-3.0.
+
+Validation of the final arrow revision:
+
+- Release build, strict signature verification, and 164 tests in 32 suites passed.
+- Live Accessibility positions confirmed all six configured Hidden apps left of
+  the arrow and visible apps right of it.
+- The user clicked the arrow twice and confirmed that the hidden icons appeared
+  on its left and then disappeared. Runtime logs independently recorded the arrow
+  toggles and the corresponding native visibility changes for all six apps.
+- Moving eqMac from Visible to Hidden through the layout context menu physically
+  placed it left of the arrow. Restoring Visible placed it right; the original
+  six Hidden assignments were preserved.
+- Replaced `/Applications/Ice.app` with the exact tested executable, verified its
+  signature and SHA-256 match, and launched it from that path. The installed app
+  repeated the successful boundary check and concealed all six configured apps.
+- Manual Command-drag adoption, global hotkeys, external-display transitions, and
+  older macOS versions remain unverified in this revision.
+
+Logs and the installation record are in `build/validation/arrow-boundary/`.
+The previous installed app is backed up at
+`build/backups/Ice-before-arrow-boundary-20261030-152819.zip`.

@@ -97,6 +97,10 @@ final class HIDEventManager: ObservableObject {
         guard let self, isEnabled else {
             return event
         }
+        if #available(macOS 27.0, *),
+           event.cgEvent?.getIntegerValueField(.eventSourceUserData) == SectionMoveInput27.tag {
+            return event
+        }
         handleMenuBarItemDragStop()
         return event
     }
@@ -373,6 +377,9 @@ extension HIDEventManager {
 
     private func handleMenuBarItemDragStop() {
         if isDraggingMenuBarItem {
+            if #available(macOS 27.0, *) {
+                appState?.sectionBoundary27.endUserDrag()
+            }
             isDraggingMenuBarItem = false
         }
     }
@@ -380,6 +387,10 @@ extension HIDEventManager {
     // MARK: Handle Menu Bar Item Drag Start
 
     private func handleMenuBarItemDragStart(with event: NSEvent, appState: AppState, screen: NSScreen) {
+        if #available(macOS 27.0, *),
+           event.cgEvent?.getIntegerValueField(.eventSourceUserData) == SectionMoveInput27.tag {
+            return
+        }
         guard
             !isDraggingMenuBarItem,
             event.modifierFlags.contains(.command),
@@ -389,6 +400,9 @@ extension HIDEventManager {
         }
 
         isDraggingMenuBarItem = true
+        if #available(macOS 27.0, *) {
+            appState.sectionBoundary27.beginUserDrag(at: MouseHelpers.locationCoreGraphics)
+        }
 
         if appState.settings.advanced.showAllSectionsOnUserDrag {
             for section in appState.menuBarManager.sections {

@@ -22,6 +22,7 @@ struct MenuBarLayoutSettingsPane: View {
             IceForm(spacing: 20) {
                 header
                 if #available(macOS 27.0, *) {
+                    SectionBoundaryStatus27(controller: appState.sectionBoundary27)
                     StuckOverflowWarning(concealer: appState.concealer27)
                 }
                 layoutBars
@@ -37,7 +38,7 @@ struct MenuBarLayoutSettingsPane: View {
                     .font(.title3.bold())
                 Group {
                     if #available(macOS 27.0, *) {
-                        Text("Drag an item or right-click to choose its section. macOS controls item order.")
+                        Text("Hidden items sit left of Ice's arrow; visible items sit right. Command-drag an icon across the arrow, or choose its section below.")
                     } else {
                         Text("Items can also be arranged by ⌘ Command + dragging them in the menu bar.")
                     }
@@ -110,6 +111,23 @@ struct MenuBarLayoutSettingsPane: View {
 
                 LayoutBar(imageCache: appState.imageCache, section: name)
             }
+        }
+    }
+}
+
+@available(macOS 27.0, *)
+private struct SectionBoundaryStatus27: View {
+    @ObservedObject var controller: SectionBoundaryController27
+    var body: some View {
+        IceSection {
+            VStack(alignment: .leading, spacing: 8) {
+                if !controller.status.isEmpty { Text(controller.status).foregroundStyle(.secondary) }
+                Button("Arrange Around Arrow") { controller.requestArrangement() }
+                    .disabled(controller.isArranging)
+                if controller.isArranging { ProgressView().controlSize(.small) }
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }

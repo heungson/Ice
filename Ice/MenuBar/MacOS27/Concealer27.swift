@@ -38,6 +38,7 @@ final class Concealer27: ObservableObject {
     /// Whether the native switch can be read and written, checked once at setup.
     @Published private(set) var nativeIsAvailable = false
     @Published private(set) var isRequestingNativeAccess = false
+    var isArrangingSections = false
 
     /// Set when the native switch failed in a way that will not mend itself in this run, so
     /// concealment falls back to assessment mode rather than leave everything shown.
@@ -743,6 +744,15 @@ final class Concealer27: ObservableObject {
 
     /// Moves an application to a section of the saved layout and applies it.
     func setSection(_ section: MacOS27Section, for bundleID: String) {
+        saveSection(section, for: bundleID)
+        appState?.sectionBoundary27.requestArrangement()
+    }
+
+    func section(for bundleID: String) -> MacOS27Section {
+        savedLayout[bundleID] ?? .visible
+    }
+
+    func saveSection(_ section: MacOS27Section, for bundleID: String) {
         let updated = SectionLayout27.settingSection(section, for: bundleID, in: savedLayout)
         Defaults.set(updated.mapValues(\.rawValue), forKey: .macOS27Layout)
         update()
@@ -828,6 +838,7 @@ final class Concealer27: ObservableObject {
     // MARK: Private
 
     private func revealState(_ appState: AppState) -> RevealState27 {
+        if isArrangingSections { return .allRevealed }
         let navigation = appState.navigationState
         if navigation.isSettingsPresented, navigation.settingsNavigationIdentifier == .menuBarLayout {
             // Everything is drawn while the layout window is open, so every item can be photographed.

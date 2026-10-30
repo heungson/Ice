@@ -13,9 +13,10 @@ enum SyntheticWindowID27 {
     static let flag: UInt32 = 0x8000_0000
 
     /// A stable identifier for an item, derived from its owner, identifier and position among the owner's items.
-    static func make(bundleID: String, identifier: String, index: Int) -> UInt32 {
+    static func make(bundleID: String, identifier: String, index: Int, processID: Int32? = nil) -> UInt32 {
         var hash: UInt32 = 2_166_136_261 // FNV-1a
-        for byte in "\(bundleID)\u{1F}\(identifier)\u{1F}\(index)".utf8 {
+        let owner = processID.map { "\(bundleID)\u{1F}\($0)" } ?? bundleID
+        for byte in "\(owner)\u{1F}\(identifier)\u{1F}\(index)".utf8 {
             hash ^= UInt32(byte)
             hash = hash &* 16_777_619
         }

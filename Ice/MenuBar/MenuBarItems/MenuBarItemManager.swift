@@ -381,6 +381,7 @@ extension MenuBarItemManager {
                 // An upgrade from an earlier macOS arrives with its sections in the bar's order and
                 // nowhere else, so the first readable bar is where they come from.
                 appState.concealer27.seedLayoutIfNeeded(items: items)
+                appState.sectionBoundary27.observe(items: items)
                 let cache = appState.concealer27.cacheFromSavedLayout(items: items, displayID: displayID)
                 if itemCache != cache {
                     itemCache = cache
