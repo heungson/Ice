@@ -45,6 +45,8 @@ enum MenuBarItemProvider27 {
     nonisolated(unsafe) private static var entries = [CGWindowID: Entry]()
     nonisolated(unsafe) private static var lastOverflowButtonFrame: CGRect?
     nonisolated(unsafe) private static var lastSystemItemFrames = [CGRect]()
+    /// The last MenuBarAgent child list logged, so it is logged only when it changes.
+    nonisolated(unsafe) private static var lastAgentDiagnostic = ""
     /// System item frames per display. MenuBarAgent describes the bars of both displays in its
     /// windows, unlike other applications, whose items only have frames on the active one.
     nonisolated(unsafe) private static var lastSystemFramesByDisplay = [CGDirectDisplayID: [CGRect]]()
@@ -258,7 +260,13 @@ enum MenuBarItemProvider27 {
             if pid != ownPID, !children.isEmpty {
                 scanSchedule.recordItems(pid: pid)
             }
+            var agentDiagnostic = [String]()
             for (index, child) in children.enumerated() {
+                if bundleID == menuBarAgentBundleID {
+                    let inner = elements(child, kAXChildrenAttribute)?.first ?? child
+                    let childFrame = frame(of: inner) ?? .zero
+                    agentDiagnostic.append("\(string(child, kAXRoleAttribute) ?? "-")/\(string(inner, kAXRoleAttribute) ?? "-") \(string(inner, kAXIdentifierAttribute) ?? string(child, kAXIdentifierAttribute) ?? "-") @\(Int(childFrame.minX))+\(Int(childFrame.width))")
+                }
                 if bundleID == menuBarAgentBundleID, string(child, kAXRoleAttribute) == kAXButtonRole {
                     // The system overflow control ("<<" / ">>").
                     chevronFrame = frame(of: child)
@@ -285,6 +293,13 @@ enum MenuBarItemProvider27 {
                 ))
             }
             if bundleID == menuBarAgentBundleID {
+                let diagnostic = agentDiagnostic.joined(separator: "; ")
+                if lock.withLock({ () -> Bool in
+                    defer { lastAgentDiagnostic = diagnostic }
+                    return lastAgentDiagnostic != diagnostic
+                }) {
+                    logger.notice("MenuBarAgent items: \(diagnostic, privacy: .public)")
+                }
                 // MenuBarAgent's window on the display whose bar is not active holds every item
                 // drawn there, not only the system ones, so taking them all made Ice treat any
                 // click as a click on a system item and lift concealment for it. The system

@@ -4,6 +4,7 @@
 //
 
 import AppKit
+import Security
 import Foundation
 import OSLog
 
@@ -150,6 +151,136 @@ final class NativeAllowListConcealer27 {
             return bundleID
         }
         return enclosingID
+    }
+
+    // MARK: Ungoverned Items
+
+    /// An item of an application Ice hides whose program its switch does not govern, so turning
+    /// the switch off leaves the item drawn.
+    struct UngovernedItem: Equatable, Identifiable {
+        /// The application that draws the item, as Ice's sections know it.
+        let bundleID: String
+        /// The name to show the user.
+        let name: String
+        /// The switch Ice turns off for the application.
+        let switchID: String
+        /// Whether macOS keeps a switch for the application at all. Some of Apple's own
+        /// applications, such as Siri AI, draw an item and never get one.
+        let hasSwitch: Bool
+        /// The program drawing the item, in the form MenuBarAgent would list it.
+        let source: TrackedApplications27.Source
+        /// What the switch governs instead.
+        let governedSources: [TrackedApplications27.Source]
+        /// Another application's switch that lists the program, if one does.
+        let governedBy: String?
+
+        var id: String { "\(bundleID)\u{1F}\(source)" }
+
+        /// Adding the program to the application's own switch is only safe when no other switch
+        /// claims it: what MenuBarAgent does with one program under two switches is unknown.
+        var isRepairable: Bool { hasSwitch && governedBy == nil }
+    }
+
+    /// The items of hidden applications that their switches do not govern.
+    ///
+    /// Read from MenuBarAgent's list, not the bar: Accessibility keeps reporting a frame for an
+    /// item that is properly hidden, so where an item appears says nothing about whether the
+    /// switch reaches it. A program counts as governed when the switch lists it in either form,
+    /// so a wrong guess at how it is signed cannot raise a false alarm.
+    func ungovernedItems(concealed: Set<String>, items: [MenuBarItem]) throws -> [UngovernedItem] {
+        guard !concealed.isEmpty else {
+            return []
+        }
+        let array = try Preferences.read()
+        let states = TrackedApplications27.allowedStates(in: array)
+        let sources = TrackedApplications27.sources(in: array)
+        var seen = Set<pid_t>()
+        var result = [UngovernedItem]()
+        for item in items {
+            guard
+                let application = item.sourceApplication,
+                let bundleID = application.bundleIdentifier,
+                concealed.contains(bundleID),
+                seen.insert(application.processIdentifier).inserted
+            else {
+                continue
+            }
+            let switchID = Self.switchIdentifier(for: bundleID, amongst: states)
+            // An application with an item and no switch is one macOS never gives a switch, such
+            // as Siri AI. One that has just launched can be in that state for a moment, until
+            // MenuBarAgent adds it; the next check after `apply` clears it again.
+            let hasSwitch = states[switchID] != nil
+            let governed = sources[switchID] ?? []
+            let forms = Self.sourceForms(of: application, bundleID: bundleID)
+            guard !forms.contains(where: governed.contains) else {
+                continue
+            }
+            let source = Self.isAdHocSigned(application) ? (forms.last ?? .bundle(bundleID)) : .bundle(bundleID)
+            result.append(UngovernedItem(
+                bundleID: bundleID,
+                name: application.localizedName ?? bundleID,
+                switchID: switchID,
+                hasSwitch: hasSwitch,
+                source: source,
+                governedSources: governed,
+                governedBy: forms.lazy.compactMap { TrackedApplications27.switchGoverning($0, in: array) }.first
+            ))
+        }
+        return result
+    }
+
+    /// Puts the item's program under its application's own switch. Returns whether the list changed.
+    ///
+    /// Only asked for by the user, for one application at a time. The program is added beside
+    /// what is there, so nothing MenuBarAgent wrote is lost.
+    func repair(_ item: UngovernedItem) throws -> Bool {
+        guard item.isRepairable else {
+            return false
+        }
+        let array = try Preferences.read()
+        guard let repaired = TrackedApplications27.addingSource(item.source, toSwitch: item.switchID, in: array) else {
+            return false
+        }
+        try Preferences.write(repaired)
+        logger.notice("Added \(item.source.description, privacy: .public) to the menu bar switch of \(item.switchID, privacy: .public)")
+        return true
+    }
+
+    /// Both forms MenuBarAgent could list the application's program in.
+    private static func sourceForms(of application: NSRunningApplication, bundleID: String) -> [TrackedApplications27.Source] {
+        var forms: [TrackedApplications27.Source] = [.bundle(bundleID)]
+        if let url = application.executableURL {
+            forms.append(.adhocBinary(path: url.path))
+            let resolved = url.resolvingSymlinksInPath().path
+            if resolved != url.path {
+                forms.append(.adhocBinary(path: resolved))
+            }
+        }
+        return forms
+    }
+
+    /// Whether the process is signed ad hoc or not at all, which MenuBarAgent lists by executable.
+    private static func isAdHocSigned(_ application: NSRunningApplication) -> Bool {
+        var code: SecCode?
+        let attributes = [kSecGuestAttributePid: application.processIdentifier] as CFDictionary
+        guard SecCodeCopyGuestWithAttributes(nil, attributes, [], &code) == errSecSuccess, let code else {
+            return false
+        }
+        var staticCode: SecStaticCode?
+        guard SecCodeCopyStaticCode(code, [], &staticCode) == errSecSuccess, let staticCode else {
+            return false
+        }
+        var information: CFDictionary?
+        guard
+            SecCodeCopySigningInformation(staticCode, SecCSFlags(rawValue: kSecCSSigningInformation), &information) == errSecSuccess,
+            let information = information as? [String: Any]
+        else {
+            return false
+        }
+        guard let flags = information[kSecCodeInfoFlags as String] as? UInt32 else {
+            return true // Unsigned.
+        }
+        return SecCodeSignatureFlags(rawValue: flags).contains(.adhoc)
     }
 
     /// Turns back on every application Ice turned off, in this run or an earlier one.

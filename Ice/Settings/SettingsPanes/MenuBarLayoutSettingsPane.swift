@@ -24,6 +24,7 @@ struct MenuBarLayoutSettingsPane: View {
                 if #available(macOS 27.0, *) {
                     SectionBoundaryStatus27(controller: appState.sectionBoundary27)
                     StuckOverflowWarning(concealer: appState.concealer27)
+                    UngovernedItemsWarning(concealer: appState.concealer27)
                 }
                 layoutBars
             }
@@ -174,6 +175,56 @@ private struct StuckOverflowWarning: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
+    }
+}
+
+/// Tells the user when macOS's own switch does not reach an item Ice hides, so it stays drawn.
+///
+/// MenuBarAgent files each program under the application responsible for it, so an
+/// application's switch can end up governing only a helper something else started, and not the
+/// application's own item.
+@available(macOS 27.0, *)
+private struct UngovernedItemsWarning: View {
+    @ObservedObject var concealer: Concealer27
+
+    var body: some View {
+        if !concealer.ungovernedItems.isEmpty {
+            IceSection {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("macOS is not hiding some items in the Hidden section.")
+                        .font(.headline)
+                    ForEach(concealer.ungovernedItems) { item in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(explanation(for: item))
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                            if item.isRepairable {
+                                Button("Fix \(item.name)") {
+                                    concealer.repairSwitch(for: item)
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(15)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
+    private func explanation(for item: NativeAllowListConcealer27.UngovernedItem) -> String {
+        if !item.hasSwitch, item.governedBy == nil {
+            return "\(item.name) stays visible because macOS gives it no menu bar switch, so Ice cannot hide it. Turn it off in System Settings › Menu Bar if macOS offers that, or move it to Visible."
+        }
+        if let other = item.governedBy {
+            return "\(item.name)'s icon is filed under \(other)'s menu bar switch, so turning off \(item.name)'s switch does not hide it. Turn \(other) off in System Settings › Menu Bar, or move \(item.name) to Visible."
+        }
+        let governed = item.governedSources.map(\.description).joined(separator: ", ")
+        let reason = governed.isEmpty
+            ? "its menu bar switch does not list the app itself"
+            : "its menu bar switch only covers \(governed)"
+        return "\(item.name) stays visible because \(reason). Fix adds \(item.name) to its own switch."
     }
 }
 

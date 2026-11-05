@@ -139,3 +139,24 @@ Validation of the final arrow revision:
 Logs and the installation record are in `build/validation/arrow-boundary/`.
 The previous installed app is backed up at
 `build/backups/Ice-before-arrow-boundary-20261030-152819.zip`.
+
+## Items the native switch does not reach
+
+macOS's `trackedApplications` record lists, per switch, the programs whose items it governs
+(`menuItemLocations`). MenuBarAgent files a program under the application responsible for it,
+so a switch can end up covering only a helper another app started. On November 5, 2026,
+ChatGPT's switch (`com.openai.codex`) covered only `/private/tmp/prs-workflow-record`, so turning
+it off left ChatGPT's own icon drawn left of the arrow.
+
+- After each native hide, Ice compares the running program of every application in a hidden
+  section against its switch's `menuItemLocations` and lists mismatches in Menu Bar Layout
+  settings and the log. It uses the saved layout, not what is hidden at that moment, because the
+  Layout pane reveals everything. It reads the record, not item frames, since Accessibility keeps
+  frames for hidden items.
+- Some Apple applications draw an item but never get a switch. Siri AI (`com.apple.campo`, a
+  magnifier icon) is one, so Ice cannot hide it; the notice says so.
+- **Fix <app>** adds the app's own program to its own switch, keeping every existing entry. It is
+  offered only when no other switch lists the program, and runs only when the user asks.
+
+Unit tests cover parsing, matching and the record edit. Whether MenuBarAgent honours an added
+`menuItemLocations` entry without a restart has not yet been verified live.

@@ -58,6 +58,12 @@ final class Concealer27: ObservableObject {
     /// Applications meant to be concealed that MenuBarAgent did not track at the last native
     /// apply, so there was no switch to turn off yet (see ``reapplyWhileLaunching(bundleID:)``).
     private var untrackedConcealed = Set<String>()
+
+    /// Items of hidden applications that macOS's switch does not reach, so they stay drawn.
+    ///
+    /// Settings lists them with a repair where one is safe (see
+    /// ``NativeAllowListConcealer27/UngovernedItem``).
+    @Published private(set) var ungovernedItems = [NativeAllowListConcealer27.UngovernedItem]()
     private let logger = Logger(category: "Concealer27")
     private weak var appState: AppState?
     private var observers = [NSObjectProtocol]()
@@ -290,6 +296,11 @@ final class Concealer27: ObservableObject {
             temporarilyShown: Set(temporarilyShown.keys)
         )
         let concealed = ConcealmentPlanner27.effectivelyConcealed(sets: target)
+        // What the layout hides, whatever is revealed at the moment. Opening Menu Bar Layout
+        // reveals everything, and the check must not clear its notice as the user arrives.
+        let meantToBeHidden = ConcealmentPlanner27.effectivelyConcealed(
+            sets: ConcealmentPlanner27.concealedSets(layout: layout, state: .allHidden)
+        )
         isConcealing = !target.isEmpty
         // The devices are only worth asking about while Ice's own indicator would be drawn: while
         // something is hidden, and only under assessment mode. With the native switch macOS keeps
@@ -348,6 +359,7 @@ final class Concealer27: ObservableObject {
             try? await Task.sleep(for: .milliseconds(400))
             await self?.appState?.itemManager.cacheItemsIfNeeded()
             await self?.checkStuckOverflow()
+            await self?.checkUngovernedItems(concealed: backend == .native ? meantToBeHidden : [])
         }
     }
 
@@ -500,6 +512,40 @@ final class Concealer27: ObservableObject {
         } else {
             logger.notice("The notched bar lays its items out again")
         }
+    }
+
+    /// Notes the applications in hidden sections whose items their switch does not reach.
+    private func checkUngovernedItems(concealed: Set<String>) async {
+        var found = [NativeAllowListConcealer27.UngovernedItem]()
+        if !concealed.isEmpty {
+            let items = await MenuBarItemProvider27.items()
+            do {
+                found = try native.ungovernedItems(concealed: concealed, items: items)
+            } catch {
+                logger.error("Could not check which items the menu bar switches reach: \(error, privacy: .public)")
+            }
+        }
+        guard found != ungovernedItems else {
+            return
+        }
+        for item in found where !ungovernedItems.contains(item) {
+            let governed = item.governedSources.map(\.description).joined(separator: ", ")
+            logger.notice("macOS does not hide \(item.bundleID, privacy: .public): its switch governs \(governed.isEmpty ? "nothing" : governed, privacy: .public), not \(item.source.description, privacy: .public)\(item.governedBy.map { "; it is listed under \($0)" } ?? "", privacy: .public)")
+        }
+        ungovernedItems = found
+    }
+
+    /// Puts an application's own item back under its own menu bar switch, then hides it again.
+    ///
+    /// Asked for from Settings. It changes MenuBarAgent's list beyond the switch itself, so Ice
+    /// does it only when the user asks.
+    func repairSwitch(for item: NativeAllowListConcealer27.UngovernedItem) {
+        do {
+            _ = try native.repair(item)
+        } catch {
+            logger.error("Could not repair the menu bar switch of \(item.switchID, privacy: .public): \(error, privacy: .public)")
+        }
+        update()
     }
 
     /// Quits an application and starts it again, which is what lays its items out afresh.

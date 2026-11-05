@@ -92,4 +92,53 @@ struct TrackedApplications27Tests {
         let (array, _) = TrackedApplications27.settingAllowed(false, for: ["com.trailing.key"], in: odd)
         #expect(same(array, odd))
     }
+
+    // MARK: Sources
+
+    // The record seen on 2026-11-05: ChatGPT's switch listed only a helper Codex had started.
+    static let strayKey: [String: Any] = ["adhocBinary": ["_0": ["relative": "file:///private/tmp/prs-workflow-record"]]]
+    static let strayFixture: [Any] = [
+        bundleKey("com.openai.codex"),
+        ["location": bundleKey("com.openai.codex"), "menuItemLocations": [strayKey], "isAllowed": false] as [String: Any],
+        bundleKey("com.google.GeminiMacOS"),
+        ["location": bundleKey("com.google.GeminiMacOS"),
+         "menuItemLocations": [bundleKey("com.google.GeminiMacOS"), bundleKey("com.google.GeminiMacOS.launcher")],
+         "isAllowed": false] as [String: Any],
+        adhocKey, value(for: adhocKey, isAllowed: true),
+    ]
+
+    @Test("Reads the programs each switch governs, in both key forms")
+    func readsSources() {
+        let sources = TrackedApplications27.sources(in: Self.strayFixture)
+        #expect(sources["com.openai.codex"] == [.adhocBinary(path: "/private/tmp/prs-workflow-record")])
+        #expect(sources["com.google.GeminiMacOS"] == [.bundle("com.google.GeminiMacOS"), .bundle("com.google.GeminiMacOS.launcher")])
+        #expect(sources.count == 2)
+    }
+
+    @Test("Finds the switch governing a program, and none for a program no switch lists")
+    func switchGoverning() {
+        #expect(TrackedApplications27.switchGoverning(.bundle("com.google.GeminiMacOS.launcher"), in: Self.strayFixture) == "com.google.GeminiMacOS")
+        #expect(TrackedApplications27.switchGoverning(.adhocBinary(path: "/private/tmp/prs-workflow-record"), in: Self.strayFixture) == "com.openai.codex")
+        #expect(TrackedApplications27.switchGoverning(.bundle("com.openai.codex"), in: Self.strayFixture) == nil)
+    }
+
+    @Test("Ad hoc paths with spaces match the percent-encoded form MenuBarAgent writes")
+    func adhocEncoding() {
+        let key: [String: Any] = ["adhocBinary": ["_0": ["relative": "file:///Users/me/Ice%20Compatibility.app/Contents/MacOS/Ice"]]]
+        let source = TrackedApplications27.Source.adhocBinary(path: "/Users/me/Ice Compatibility.app/Contents/MacOS/Ice")
+        #expect(TrackedApplications27.Source(key: key) == source)
+        #expect((source.key as NSDictionary).isEqual(to: key))
+    }
+
+    @Test("Adding an application's own item keeps everything else and is idempotent")
+    func addsSource() throws {
+        let repaired = try #require(TrackedApplications27.addingSource(.bundle("com.openai.codex"), toSwitch: "com.openai.codex", in: Self.strayFixture))
+        let value = try #require(repaired[1] as? [String: Any])
+        #expect((value["menuItemLocations"] as? NSArray)?.isEqual(to: [Self.strayKey, Self.bundleKey("com.openai.codex")]) == true)
+        #expect(value["isAllowed"] as? Bool == false)
+        #expect(same(Array(repaired[2...]), Array(Self.strayFixture[2...])))
+        #expect(TrackedApplications27.switchGoverning(.bundle("com.openai.codex"), in: repaired) == "com.openai.codex")
+        #expect(TrackedApplications27.addingSource(.bundle("com.openai.codex"), toSwitch: "com.openai.codex", in: repaired) == nil)
+        #expect(TrackedApplications27.addingSource(.bundle("x"), toSwitch: "com.missing", in: Self.strayFixture) == nil)
+    }
 }
