@@ -103,6 +103,24 @@ enum SectionLayout27 {
         return bounds.maxX <= alwaysHiddenControlItem.minX ? .alwaysHidden : nil
     }
 
+    /// Running applications the saved layout keeps out of sight whose items Accessibility does
+    /// not report, sorted by bundle identifier.
+    ///
+    /// Items macOS folds behind its own overflow control publish no Accessibility menu bar at
+    /// all (measured on macOS 27.2: `kAXErrorNoValue`). Revealing every section for the Layout
+    /// pane on a built-in display folds the hidden ones first, since they sit leftmost, so the
+    /// pane listed none of them. These applications are still in their sections.
+    static func unreportedApplications(
+        saved: [String: MacOS27Section],
+        reported: Set<String>,
+        running: Set<String>
+    ) -> [(bundleID: String, section: MacOS27Section)] {
+        saved
+            .filter { $0.value != .visible && running.contains($0.key) && !reported.contains($0.key) }
+            .map { (bundleID: $0.key, section: $0.value) }
+            .sorted { $0.bundleID < $1.bundleID }
+    }
+
     /// The applications whose section is one of the given sections.
     static func bundles(in sections: Set<MacOS27Section>, layout: [String: MacOS27Section]) -> Set<String> {
         Set(layout.compactMap { sections.contains($0.value) ? $0.key : nil })

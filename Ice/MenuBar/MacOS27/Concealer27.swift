@@ -878,6 +878,44 @@ final class Concealer27: ObservableObject {
             case .alwaysHidden: cache[.alwaysHidden].append(item)
             }
         }
+        // Folded items are not reported at all, so they would drop out of their sections.
+        // They are listed from the saved layout instead, as items that are not drawn.
+        var running = [String: NSRunningApplication]()
+        for application in NSWorkspace.shared.runningApplications {
+            if let bundleID = application.bundleIdentifier, running[bundleID] == nil {
+                running[bundleID] = application
+            }
+        }
+        let unreported = SectionLayout27.unreportedApplications(
+            saved: layout,
+            reported: Set(items.compactMap { $0.sourceApplication?.bundleIdentifier }),
+            running: Set(running.keys)
+        )
+        for (bundleID, section) in unreported {
+            guard let application = running[bundleID] else {
+                continue
+            }
+            // The title of a glyph stored earlier, so the tile shows the item rather than the app icon.
+            let title = appState?.itemImageStore27.storedTitle(forBundleID: bundleID) ?? "Item-0"
+            let item = MenuBarItem(
+                tag: MenuBarItemTag(namespace: .string(bundleID), title: title),
+                syntheticWindowID: SyntheticWindowID27.make(
+                    bundleID: bundleID,
+                    identifier: title,
+                    index: 0,
+                    processID: application.processIdentifier
+                ),
+                ownerPID: application.processIdentifier,
+                bounds: .zero,
+                title: nil,
+                isOnScreen: false
+            )
+            switch section {
+            case .visible: break
+            case .hidden: cache[.hidden].insert(item, at: 0)
+            case .alwaysHidden: cache[.alwaysHidden].insert(item, at: 0)
+            }
+        }
         return cache
     }
 

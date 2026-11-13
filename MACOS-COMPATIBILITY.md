@@ -160,3 +160,23 @@ it off left ChatGPT's own icon drawn left of the arrow.
 
 Unit tests cover parsing, matching and the record edit. Whether MenuBarAgent honours an added
 `menuItemLocations` entry without a restart has not yet been verified live.
+
+## Hidden apps folded behind the overflow control
+
+The Layout pane reveals every section so items can be photographed. On the built-in display,
+15 hidden applications did not fit beside the notch, so macOS folded them behind its own `«`
+control. Folded items publish no Accessibility menu bar (`kAXErrorNoValue`, measured on macOS
+27.2 for eqMac, Raycast, OneDrive, Genians and Ice's own arrow), so the pane's Hidden section
+was empty and Visible showed only what fitted.
+
+- A running application that the saved layout puts in Hidden or Always Hidden, and whose items
+  are not reported, is listed in its section as an item that is not drawn. Its tile uses a
+  previously stored glyph, or the application's icon.
+- Such items are not on screen, so hover hit-testing and glyph capture skip them.
+
+Validation on November 12, 2026: 169 core tests and the Release build passed, the installed
+app's signature and hash matched the build, and the live Layout pane listed 14 Hidden
+applications (AltTab, the 15th saved one, was not running). The tiles were read through
+Accessibility labels; their images were not inspected. Revealing every section still folds
+Ice's arrow on this display, so arrangement reports that the arrow is not reachable while the
+pane is open.

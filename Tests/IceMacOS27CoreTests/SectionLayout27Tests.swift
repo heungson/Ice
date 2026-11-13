@@ -124,4 +124,21 @@ struct SeededLayout27Tests {
     func empty() {
         #expect(SectionLayout27.seededLayout(items: [], hiddenControlItem: hiddenDivider, alwaysHiddenControlItem: nil) == nil)
     }
+
+    @Test("Hidden apps that are running but unreported keep their sections")
+    func unreportedHiddenApps() {
+        let result = SectionLayout27.unreportedApplications(
+            saved: [
+                "com.bitgapp.eqmac": .hidden,
+                "com.raycast.macos": .alwaysHidden,
+                "com.microsoft.teams2": .hidden,
+                "com.example.NotRunning": .hidden,
+                "com.example.Visible": .visible,
+            ],
+            reported: ["com.microsoft.teams2"],
+            running: ["com.bitgapp.eqmac", "com.raycast.macos", "com.microsoft.teams2", "com.example.Visible"]
+        )
+        #expect(result.map(\.bundleID) == ["com.bitgapp.eqmac", "com.raycast.macos"])
+        #expect(result.map(\.section) == [.hidden, .alwaysHidden])
+    }
 }

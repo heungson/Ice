@@ -280,6 +280,15 @@ final class ItemImageStore27 {
     /// revealing items one after another.
     private static let photographsPerPass = 6
 
+    /// The title of a stored item image belonging to the application, if there is one.
+    func storedTitle(forBundleID bundleID: String) -> String? {
+        let prefix = bundleID + ":"
+        return index.keys
+            .filter { $0.hasPrefix(prefix) }
+            .min()
+            .map { String($0.dropFirst(prefix.count)) }
+    }
+
     /// Whether any of the application's items has a stored image.
     private func hasImage(forBundleID bundleID: String) -> Bool {
         index.keys.contains { $0.hasPrefix(bundleID + ":") }
